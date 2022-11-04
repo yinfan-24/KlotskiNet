@@ -9,6 +9,7 @@ def train_Klotskinet():
     from torchvision.transforms import Resize
 
     from utils.get_image_path import get_train_list
+    from utils.get_image_path import get_test_list
     from utils.image_split import img_split_r_negative
     from utils.get_save_time import get_save_time
 
@@ -16,7 +17,7 @@ def train_Klotskinet():
     # 定义超参数
     HyperParameters = {
         'lr': 0.001,
-        'epochs': 10,
+        'epochs': 5,
     }
     class_list = ["aeroplane", "bicycle", "bird", "boat", "bottle", "bus", "car",
                   "cat", "chair", "cow", "diningtable", "dog", "horse", "motorbike",
@@ -54,7 +55,10 @@ def train_Klotskinet():
             for file_name, true_label in tqdm(filename_list):
                 img_path = base_img_train_path + file_name + ".jpg"
                 xml_path = base_xml_train_path + file_name + ".xml"
-                tiles = img_split_r_negative(true_label, img_path, xml_path)
+                try:
+                    tiles = img_split_r_negative(true_label, img_path, xml_path)
+                except:
+                    tiles = []
                 true_label = torch.tensor([0]) if true_label == -1 else torch.tensor([1])
                 true_label = true_label.to(device)
                 if len(tiles) >= 1:
@@ -78,11 +82,14 @@ def train_Klotskinet():
         total_nums = 0
         right_nums = 0
         for class_name in class_list:
-            filename_list = get_train_list(class_name)
+            filename_list = get_test_list(class_name)
             for file_name, true_label in filename_list:
                 img_path = base_img_test_path + file_name + ".jpg"
                 xml_path = base_xml_test_path + file_name + ".xml"
-                tiles = img_split_r_negative(true_label, img_path, xml_path)
+                try:
+                    tiles = img_split_r_negative(true_label, img_path, xml_path)
+                except:
+                    tiles = []
                 if len(tiles) >= 1:
                     total_nums = total_nums + 1
                     max_conf_tile = tiles[0].to(device).unsqueeze(dim=0)
