@@ -1,11 +1,13 @@
 def train_Klotskinet():
     import torch
+    import os
     import torchvision
     import torch.nn as nn
     from tqdm import tqdm
     from torchvision.models.resnet import resnet50
     from network_prototype.resnet import Resnet50
     from torchvision import transforms
+    from torch.autograd import Variable
     from torchvision.transforms import Resize
 
     from utils.get_image_path import get_train_list
@@ -26,6 +28,7 @@ def train_Klotskinet():
     torch_resize = Resize([400, 400])
 
     # 加载model
+    os.environ['TORCH_HOME'] = 'pretrain_weights/'
     resnet50 = resnet50(pretrained=True).to(device)
     model = Resnet50(2).to(device)
     # 读取参数
@@ -49,41 +52,51 @@ def train_Klotskinet():
     base_xml_test_path = r"raw_dataset/VOCdevkitTest/VOC2007/Annotations/"
 
     for i in range(0, HyperParameters['epochs']):
-        for class_name in class_list:
+        for j in range(0, len(class_list)):
+            class_name = class_list[j]
             filename_list = get_train_list(class_name)
 
-            for file_name, true_label in tqdm(filename_list):
+            for file_name, true_label in tqdm(filename_list, desc='Epoch: {}/{}||Train||class: {}/{}|'.format(i+1, HyperParameters['epochs'], j+1, len(class_list)) ):
                 img_path = base_img_train_path + file_name + ".jpg"
                 xml_path = base_xml_train_path + file_name + ".xml"
                 try:
                     tiles = img_split_r_negative(true_label, img_path, xml_path)
+                    tiles = Variable(tiles, requires_grad=True)
                 except:
                     tiles = []
                 true_label = torch.tensor([0]) if true_label == -1 else torch.tensor([1])
                 true_label = true_label.to(device)
+
+
                 if len(tiles) >= 1:
-                    max_conf_tile = tiles[0].to(device).unsqueeze(dim=0)
-                    max_conf_tile = torch_resize(max_conf_tile)
-                    max_confidence = torch.tensor(-10).to(device)
-                    for tile in tiles:
-                        t = tile.to(device).unsqueeze(dim=0)
-                        t = torch_resize(t)
-                        t_output = model(t).to(device)
-                        tile_confidence = t_output[0][torch.argmax(t_output)]
-                        if tile_confidence > max_confidence:
-                            max_confidence = tile_confidence
-                            max_conf_tile = t
-                    output = model(max_conf_tile).to(device)
-                    loss = criterion(output, true_label)
+                    output = model(tiles).to(device)
+                    max_conf = output[int(torch.argmax(output) / 2)].unsqueeze(dim=0)
+                    loss = criterion(max_conf, true_label)
                     optimizer.zero_grad()
                     loss.backward()
                     optimizer.step()
-
+                    # max_conf_tile = tiles[0].to(device).unsqueeze(dim=0)
+                    # max_conf_tile = torch_resize(max_conf_tile)
+                    # max_confidence = torch.tensor(-10).to(device)
+                    # for tile in tiles:
+                    #     t = tile.to(device).unsqueeze(dim=0)
+                    #     t = torch_resize(t)
+                    #     t_output = model(t).to(device)
+                    #     tile_confidence = t_output[0][torch.argmax(t_output)]
+                    #     if tile_confidence > max_confidence:
+                    #         max_confidence = tile_confidence
+                    #         max_conf_tile = t
+                    # output = model(max_conf_tile).to(device)
+                    # loss = criterion(output, true_label)
+                    # optimizer.zero_grad()
+                    # loss.backward()
+                    # optimizer.step()
         total_nums = 0
         right_nums = 0
-        for class_name in class_list:
+        for j in range(0, len(class_list)):
+            class_name = class_list[j]
             filename_list = get_test_list(class_name)
-            for file_name, true_label in filename_list:
+            for file_name, true_label in tqdm(filename_list, desc='Epoch: {}/{}||Train||class: {}/{}|'.format(i+1, HyperParameters['epochs'], j+1, len(class_list)) ):
                 img_path = base_img_test_path + file_name + ".jpg"
                 xml_path = base_xml_test_path + file_name + ".xml"
                 try:
@@ -110,8 +123,7 @@ def train_Klotskinet():
                     right_nums = right_nums + 1
         print(right_nums, total_nums)
         print("Epoch:{}, Acc:{}, Time:{}\n".format(i+1, right_nums/(total_nums + 0.1), get_save_time()))
-        torch.save(model.state_dict(), 'newwork_weights/resnet50_{}_{}.pth'.format(right_nums/(total_nums + 0.1), get_save_time()))
-
+        torch.save(model.state_dict(), 'network_weights/resnet50_{}_{}.pth'.format(right_nums/(total_nums + 0.1), get_save_time()))
 
 if __name__ == '__main__':
     train_Klotskinet()

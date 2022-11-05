@@ -5,7 +5,11 @@ def img_split_r_negative(label_type, img_path, xml_path):
     from PIL import Image
     from utils.read_xml import read_voc_xml
     from torchvision.transforms import transforms
+    import torch
+    from torchvision.transforms import Resize
 
+    torch_resize = Resize([400, 400])
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     img = Image.open(img_path)
     label_list = read_voc_xml(xml_path)
     width, height = img.size
@@ -19,9 +23,13 @@ def img_split_r_negative(label_type, img_path, xml_path):
     while i + w <= width:
         while (j + h <= height):
             new_img = img.crop((i, j, i + w, j + h))
-            new_img = transforms.ToTensor()(new_img)
+            new_img = transforms.ToTensor()(new_img).to(device)
+            new_img = torch_resize(new_img).unsqueeze(dim=0)
             if label_type == -1:
-                rst_tensor.append(new_img)
+                try:
+                    rst_tensor = torch.cat((rst_tensor, new_img))
+                except:
+                    rst_tensor = new_img
             # if the tile contains foreground, remove it
             else:
                 is_foreground = False
@@ -40,17 +48,24 @@ def img_split_r_negative(label_type, img_path, xml_path):
                         is_foreground = True
                         break
                 if not is_foreground:
-                    rst_tensor.append(new_img)
-            j = j + w
-        i += h
+                    try:
+                        rst_tensor = torch.cat((rst_tensor, new_img))
+                    except:
+                        rst_tensor = new_img
+            j = j + h
+        i += w
         j = 0
     return rst_tensor
 
 
 def img_seg(img_path):
     from PIL import Image
+    import torch
     from torchvision.transforms import transforms
+    from torchvision.transforms import Resize
 
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    torch_resize = Resize([400, 400])
     img = Image.open(img_path)
     width, height = img.size
     w = width / 5
@@ -61,10 +76,15 @@ def img_seg(img_path):
     while i + w <= width:
         while j + h <= height:
             new_img = img.crop((i, j, i + w, j + h))
-            new_img = transforms.ToTensor()(new_img)
-            rst_tensor.append(new_img)
-            j = j + w
-        i += h
+            new_img = transforms.ToTensor()(new_img).to(device)
+            new_img = torch_resize(new_img).unsqueeze(dim=0)
+            try:
+                rst_tensor = torch.cat((rst_tensor, new_img))
+            except:
+                rst_tensor = new_img
+
+            j = j + h
+        i += w
         j = 0
 
     return rst_tensor
